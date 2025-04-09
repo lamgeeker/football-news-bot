@@ -1,41 +1,36 @@
-const functions = require('firebase-functions');
+const express = require('express');
 const axios = require('axios');
+const bodyParser = require('body-parser');
 
-exports.dialogflowFirebaseFulfillment = functions.https.onRequest((req, res) => {
-  const intent = req.body.queryResult.intent.displayName;
+const app = express();
+app.use(bodyParser.json());
 
-  if (intent === 'GetLatestFootballNews') {
-    const apiKey = '5396ff8daa0c49fa97e42c63b16f0712';
+const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
-    axios.get(`https://newsapi.org/v2/everything?q=football&language=en&sortBy=publishedAt&pageSize=5&apiKey=${apiKey}`)
-      .then(response => {
-        const articles = response.data.articles;
+app.post('/webhook', async (req, res) => {
+  try {
+    const newsResponse = await axios.get(
+      `https://newsapi.org/v2/everything?q=football&language=en&pageSize=3&apiKey=${NEWS_API_KEY}`
+    );
 
-        if (articles.length === 0) {
-          res.json({ fulfillmentText: 'Не вдалося знайти новини про футбол 😕' });
-        } else {
-          const newsList = articles.map(a => `📰 *${a.title}*\n${a.url}`).join('\n\n');
-          res.json({
-            fulfillmentMessages: [
-              {
-                text: {
-                  text: ["Ось останні футбольні новини:"]
-                }
-              },
-              {
-                text: {
-                  text: [newsList]
-                }
-              }
-            ]
-          });
-        }
-      })
-      .catch(error => {
-        console.error(error);
-        res.json({ fulfillmentText: 'Сталася помилка при отриманні новин 😓' });
-      });
-  } else {
-    res.json({ fulfillmentText: 'Інтенція не підтримується цим webhook' });
+    const articles = newsResponse.data.articles;
+    const messages = articles.map((a, i) => `${i + 1}. ${a.title}\n${a.url}`).join('\n\n');
+
+    return res.json({
+      fulfillmentText: `Ось найсвіжіші футбольні новини:\n\n${messages}`,
+    });
+  } catch (error) {
+    console.error('Помилка при отриманні новин:', error.message);
+    return res.json({
+      fulfillmentText: 'Вибач, не вдалося отримати новини 🥲',
+    });
   }
+});
+
+app.get('/', (req, res) => {
+  res.send('Football bot is running!');
+});
+
+app.listen(process.env.PORT || 3000, () => {
+  console.log('Сервер запущено');
 });
